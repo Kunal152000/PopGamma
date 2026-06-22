@@ -1,5 +1,13 @@
 import { z } from "zod";
 
+export const RegisterSchema = z.object({
+  email: z.email("A valid email is required"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+});
+
+// Login takes the same shape as register.
+export const LoginSchema = RegisterSchema;
+
 export const RequestSchema = z.object({
     board: z.string().min(1, "Board is required"),
     grade: z.number().int().min(1).max(12, "Grade must be between 9 to 12"),
@@ -67,5 +75,8 @@ export const LearningCardSchema = z.object({
     visual: VisualSchema,
   });
   
+
+export type RegisterRequest = z.infer<typeof RegisterSchema>;
+export type LoginRequest = z.infer<typeof LoginSchema>;
 export type CardRequest = z.infer<typeof RequestSchema>
 export type LearningCard = z.infer<typeof LearningCardSchema>;

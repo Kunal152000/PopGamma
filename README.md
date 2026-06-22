@@ -55,10 +55,39 @@ validate the model's output against a Zod schema → retry once if it doesn't ma
 | File | Responsibility |
 | --- | --- |
 | `src/index.ts` | Boots the Fastify server, handles graceful shutdown |
-| `src/server.ts` | HTTP routing, request validation, error → status mapping |
+| `src/server.ts` | HTTP routing, request validation, auth (register/login + JWT guard), error → status mapping |
 | `src/cardService.ts` | Prompt building, LLM call, output validation, retry logic |
-| `src/schema.ts` | Zod schemas for the request and the learning card (single source of truth) |
+| `src/schema.ts` | Zod schemas for the request, auth bodies, and the learning card (single source of truth) |
 | `src/llm.ts` | OpenRouter/OpenAI client + model configuration |
+| `src/userStore.ts` | User creation & credential verification (bcrypt password hashing) |
+| `src/db.ts` | SQLite connection and `users` table bootstrap |
+
+## Authentication
+
+The `POST /learning-card` endpoint is protected. Clients must register or log in to
+obtain a **JWT**, then send it as a `Bearer` token on every card request.
+
+- **Passwords** are never stored in plain text — `src/userStore.ts` hashes them with
+  **bcrypt** (cost factor 12) before they touch the database.
+- **Users** live in a SQLite `users` table (`src/db.ts`), with a unique constraint on
+  `email` so duplicate sign-ups are rejected.
+- **Tokens** are signed with `@fastify/jwt` using `JWT_SECRET` and expire after
+  `JWT_EXPIRES_IN` (default `1h`). The token payload carries the user's `id` and `email`.
+- The `authenticate` pre-handler in `src/server.ts` verifies the token on protected routes
+  and returns `401` if it is missing or invalid.
+
+### Endpoints
+
+| Method | Path | Auth | Body | Returns |
+| --- | --- | --- | --- | --- |
+| `POST` | `/register` | none | `{ email, password }` | `201 { token }` |
+| `POST` | `/login` | none | `{ email, password }` | `200 { token }` |
+| `POST` | `/learning-card` | Bearer JWT | `{ board, grade, concept }` | `200` learning card |
+| `GET` | `/health` | none | — | `{ "status": "ok" }` |
+
+`email` must be a valid email and `password` must be at least 8 characters (enforced by
+`RegisterSchema` in `src/schema.ts`). Registering an existing email returns `409`, and bad
+credentials on login return `401`.
 
 ## Setup & run
 
@@ -81,6 +110,9 @@ Create a `.env` file in the project root:
 OPENROUTER_API_KEY=sk-or-v1-your-key-here
 OPENROUTER_MODEL=openai/gpt-4.1-nano   # optional, defaults to openai/gpt-4o-mini
 PORT=3000                              # optional, defaults to 3000
+JWT_SECRET=change-me                   # required — used to sign/verify auth tokens
+JWT_EXPIRES_IN=1h                      # optional, defaults to 1h
+DATABASE_PATH=./data/app.db            # optional, defaults to ./data/app.db
 ```
 
 ### Run
@@ -96,9 +128,21 @@ The server listens on `http://localhost:3000`.
 
 ### Try it
 
+First create an account (or log in) to get a token:
+
+```bash
+curl -X POST http://localhost:3000/register \
+  -H "Content-Type: application/json" \
+  -d '{ "email": "you@example.com", "password": "supersecret" }'
+# -> { "token": "eyJhbGci..." }
+```
+
+Then call the protected endpoint with the token as a `Bearer` header:
+
 ```bash
 curl -X POST http://localhost:3000/learning-card \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer eyJhbGci..." \
   -d '{ "board": "CBSE", "grade": 9, "concept": "Slope-intercept form of a line (y = mx + c)" }'
 ```
 
@@ -126,8 +170,13 @@ without making an LLM call.
   var (`OPENROUTER_MODEL`).
 - **Bounded output (`max_tokens: 1200`, `temperature: 0.4`).** Caps worst-case latency and
   keeps generations deterministic enough to be reliable, while leaving room for a full card.
-- **Clear error mapping.** Bad client input → `400`; a model that can't produce valid data →
-  `502`, so callers can distinguish their fault from an upstream failure.
+- **Clear error mapping.** Bad client input → `400`; missing/invalid token → `401`; duplicate
+  email → `409`; a model that can't produce valid data → `502`, so callers can distinguish
+  their fault from an upstream failure.
+- **Stateless JWT auth with hashed passwords.** Auth is handled with short-lived JWTs
+  (`@fastify/jwt`) so the API stays stateless and horizontally scalable, while passwords are
+  hashed with bcrypt — the database never sees a plain-text password. The same Zod schema
+  validates register and login bodies.
 
 ## What I'd do with more time
 
@@ -135,7 +184,8 @@ without making an LLM call.
   plus an integration test for the route covering the `400` / `200` / `502` paths.
 - **Streaming responses** so a frontend can render sections progressively.
 - **Caching** identical `{ board, grade, concept }` requests to cut latency and cost.
-- **Rate limiting & auth** before exposing the endpoint publicly.
+- **Rate limiting** and refresh tokens / token revocation to harden the existing JWT auth
+  before exposing the endpoint publicly.
 - **Richer visuals** (e.g. multiple visuals per card, more graph metadata) and per-board
   prompt tuning.
 - **Observability** — request/latency metrics and structured logging of validation-failure
