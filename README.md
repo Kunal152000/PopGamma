@@ -99,6 +99,7 @@ credentials on login return `401`.
 ### Install
 
 ```bash
+cd PoPGamma-master
 npm install
 ```
 
@@ -119,9 +120,6 @@ DATABASE_PATH=./data/app.db            # optional, defaults to ./data/app.db
 
 ```bash
 npm run dev      # development with hot reload (tsx watch)
-
-npm run build    # compile TypeScript to dist/
-npm start        # run the compiled build
 ```
 
 The server listens on `http://localhost:3000`.
