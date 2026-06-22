@@ -54,9 +54,8 @@ async function callModel(messages: { role: "system" | "user" | "assistant"; cont
       model,
       messages,
       response_format: { type: "json_object" },
-      temperature: 0.4,
-      // Hard ceiling on output size: a compressed card needs well under this,
-      // so it bounds worst-case latency without truncating valid responses.
+      temperature: 0.2,
+      top_p: 0.1,
       max_tokens: 1200,
     });
     const t1 = performance.now();

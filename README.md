@@ -99,6 +99,7 @@ credentials on login return `401`.
 ### Install
 
 ```bash
+cd PoPGamma-master
 npm install
 ```
 
@@ -119,9 +120,6 @@ DATABASE_PATH=./data/app.db            # optional, defaults to ./data/app.db
 
 ```bash
 npm run dev      # development with hot reload (tsx watch)
-
-npm run build    # compile TypeScript to dist/
-npm start        # run the compiled build
 ```
 
 The server listens on `http://localhost:3000`.
@@ -165,6 +163,7 @@ without making an LLM call.
 - **Prompt enforces formatting rules, schema enforces correctness.** The prompt asks for
   concise content and clean LaTeX (no `$` in formula fields); the schema is the hard
   guarantee. If they disagree, the schema wins.
+- **Intentionally concise responses to spark follow-up questions.** The card is kept short and high-level rather than exhaustive — small section/formula limits and brief bodies are a deliberate choice, not just a cost or latency measure. The goal is to teach the core idea and leave the learner curious enough to ask follow-up questions about the topic, rather than overwhelming them with a wall of detail up front.
 - **OpenRouter via the OpenAI SDK.** Using the OpenAI-compatible client against OpenRouter
   keeps the integration familiar and makes the underlying model swappable through one env
   var (`OPENROUTER_MODEL`).
